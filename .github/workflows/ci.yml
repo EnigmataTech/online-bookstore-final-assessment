@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements.txt
+            requirements-test.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install -r requirements-test.txt
+
+      - name: Static checks (ruff)
+        run: ruff check . || true
+
+      - name: Run tests (pytest)
+        run: pytest
+
+      - name: Enforce coverage threshold (80% global)
+        if: matrix.python-version == '3.11'
+        run: |
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('coverage.xml')
+          total = tree.getroot().attrib.get('line-rate', None)
+          if total is None:
+              raise SystemExit("coverage.xml missing line-rate")
+          pct = float(total) * 100
+          print(f"Total coverage: {pct:.2f}%")
+          if pct < 80.0:
+              raise SystemExit(f"Coverage {pct:.2f}% is below required 80%")
+          PY
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-and-coverage-${{ matrix.python-version }}
+          path: |
+            coverage.xml
+            .coverage
+            test-results/
+            perf_artifacts/
+          if-no-files-found: ignore
+
+  benchmark:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements.txt
+            requirements-test.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install -r requirements-test.txt
+      - name: Run lightweight performance checks
+        run: |
+          python perf/profile_checkout.py || true
+          python perf/profile_catalog.py || true
+      - name: Upload profiling artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: profiling
+          path: perf_artifacts
+          if-no-files-found: ignore
