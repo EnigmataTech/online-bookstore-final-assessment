@@ -9,6 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PYTEST_ADDOPTS: "-n 1"
+      PYTHONPATH: ${{ github.workspace }}
     strategy:
       fail-fast: false
       matrix:
@@ -53,24 +54,27 @@ jobs:
         run: |
           python - <<'PY'
           import importlib, sys, os, pathlib, importlib.util
-          def smart_import(module_name, filename):
-              try:
-                  return importlib.import_module(module_name)
-              except Exception as e:
-                  # Fallback: locate file anywhere in repo and import from path
-                  root = pathlib.Path(".").resolve()
-                  matches = list(root.rglob(filename))
-                  if not matches:
-                      raise
-                  path = str(matches[0])
-                  spec = importlib.util.spec_from_file_location(module_name, path)
-                  mod = importlib.util.module_from_spec(spec)
-                  spec.loader.exec_module(mod)
-                  sys.modules[module_name] = mod
-                  return mod
-          for name, fn in (("app","app.py"),("models","models.py")):
-              mod = smart_import(name, fn)
-              print(f"[OK] imported {name} from {getattr(mod,'__file__', '<unknown>')}")
+          def import_by_filename(modname, filename):
+              root = pathlib.Path(".").resolve()
+              matches = list(root.rglob(filename))
+              if not matches:
+                  raise ImportError(f"Cannot find {filename}")
+              path = str(matches[0])
+              spec = importlib.util.spec_from_file_location(modname, path)
+              mod = importlib.util.module_from_spec(spec)
+              spec.loader.exec_module(mod)  # type: ignore
+              sys.modules[modname] = mod
+              return mod
+          try:
+              importlib.import_module("models")
+          except Exception:
+              import_by_filename("models", "models.py")
+          try:
+              app_mod = importlib.import_module("app")
+          except Exception:
+              app_mod = import_by_filename("app", "app.py")
+          print(f"[OK] models: {sys.modules['models'].__file__}")
+          print(f"[OK] app: {app_mod.__file__}")
           PY
 
       - name: Run tests (pytest)
@@ -104,6 +108,8 @@ jobs:
   benchmark:
     needs: test
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
