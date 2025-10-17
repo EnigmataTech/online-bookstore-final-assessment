@@ -1,0 +1,37 @@
+import importlib, cProfile, pstats, io, os, importlib.util, pathlib, sys
+
+def _smart_import(module_name: str, filename: str):
+    try:
+        return importlib.import_module(module_name)
+    except Exception:
+        root = pathlib.Path(".").resolve()
+        matches = list(root.rglob(filename))
+        if not matches:
+            raise
+        path = str(matches[0])
+        spec = importlib.util.spec_from_file_location(module_name, path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)  # type: ignore
+        sys.modules[module_name] = mod
+        return mod
+
+def run():
+    app_mod = _smart_import("app", "app.py")
+    app = getattr(app_mod, "app")
+    app.config.update(TESTING=True, SECRET_KEY="ci")
+    client = app.test_client()
+    pr = cProfile.Profile()
+    pr.enable()
+    client.get("/")
+    pr.disable()
+    s = io.StringIO()
+    pstats.Stats(pr, stream=s).sort_stats("cumulative").print_stats(30)
+    os.makedirs("perf_artifacts", exist_ok=True)
+    with open("perf_artifacts/catalog_profile.txt", "w") as f:
+        f.write(s.getvalue())
+
+if __name__ == "__main__":
+    try:
+        run()
+    except Exception as e:
+        print(f"[profile_catalog] Skipped due to error: {e}")
