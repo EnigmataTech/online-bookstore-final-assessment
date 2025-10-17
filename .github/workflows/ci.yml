@@ -35,7 +35,7 @@ jobs:
       - name: Static checks (ruff)
         run: ruff check . || true
 
-      - name: Sanity: import app & models
+      - name: "Sanity: import app & models"
         run: |
           python - <<'PY'
           import importlib, sys
