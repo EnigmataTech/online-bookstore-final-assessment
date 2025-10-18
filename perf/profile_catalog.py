@@ -1,22 +1,29 @@
-import importlib, cProfile, pstats, io, os, importlib.util, pathlib, sys
+import importlib, cProfile, pstats, io, os, importlib.util, sys, pathlib
 
-def _smart_import(module_name: str, filename: str):
+def _import_by_filename(module_name: str, filename: str):
+    root = pathlib.Path(".").resolve()
+    matches = list(root.rglob(filename))
+    if not matches:
+        raise ImportError(f"Cannot find {filename}")
+    path = str(matches[0])
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # type: ignore
+    sys.modules[module_name] = mod
+    return mod
+
+def _ensure_models_then_app():
     try:
-        return importlib.import_module(module_name)
+        importlib.import_module("models")
     except Exception:
-        root = pathlib.Path(".").resolve()
-        matches = list(root.rglob(filename))
-        if not matches:
-            raise
-        path = str(matches[0])
-        spec = importlib.util.spec_from_file_location(module_name, path)
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)  # type: ignore
-        sys.modules[module_name] = mod
-        return mod
+        _import_by_filename("models", "models.py")
+    try:
+        return importlib.import_module("app")
+    except Exception:
+        return _import_by_filename("app", "app.py")
 
 def run():
-    app_mod = _smart_import("app", "app.py")
+    app_mod = _ensure_models_then_app()
     app = getattr(app_mod, "app")
     app.config.update(TESTING=True, SECRET_KEY="ci")
     client = app.test_client()
