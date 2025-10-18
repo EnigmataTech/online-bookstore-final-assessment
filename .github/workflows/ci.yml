@@ -32,7 +32,7 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install -r requirements-test.txt
 
-      - name: "Sanity: import models then app"
+      - name: Sanity: import models then app
         run: python .github/scripts/import_preflight.py
 
       - name: Run tests (pytest)
