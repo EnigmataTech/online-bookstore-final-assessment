@@ -32,15 +32,33 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install -r requirements-test.txt
 
-      - name: "Sanity: import models then app"
+      - name: Sanity: import models then app
+        run: python .github/scripts/import_preflight.py
+
+      - name: Run tests (pytest)
+        run: pytest
+
+      - name: Enforce coverage threshold (20% global TEMP)
+        if: matrix.python-version == '3.11'
         run: |
           python - <<'PY'
-          import importlib, importlib.util, sys, pathlib
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('coverage.xml')
+          total = tree.getroot().attrib.get('line-rate', None)
+          if total is None:
+              raise SystemExit("coverage.xml missing line-rate")
+          pct = float(total) * 100
+          print(f"Total coverage: {pct:.2f}%")
+          if pct < 20.0:
+              raise SystemExit(f"Coverage {pct:.2f}% is below temporary floor 20%")
+          PY
 
-          def import_by_filename(modname, filename):
-              root = pathlib.Path(".").resolve()
-              path = next(root.rglob(filename), None)
-              if path is None:
-                  raise SystemExit(f"Cannot find {filename}")
-              spec = importlib.util.spec_from_file_location(modname, str(path))
-              mod = importlib.util.module_f_
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-and-coverage-${{ matrix.python-version }}
+          path: |
+            coverage.xml
+            .coverage
+            test-results/
+          if-no-files-found: ignore
