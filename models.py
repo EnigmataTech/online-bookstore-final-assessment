@@ -1,3 +1,12 @@
+"""
+Data models for the online bookstore application.
+Optimized: Module imports moved to top level for better performance.
+"""
+import datetime
+import random
+import time
+
+
 class Book:
     def __init__(self, title, category, price, image):
         self.title = title
@@ -53,10 +62,14 @@ class Cart:
             self.items[book_title].quantity = quantity
 
     def get_total_price(self):
+        """
+        Calculate total price of all items in cart.
+        Optimized: O(n) instead of O(n*m) by using direct multiplication
+        instead of nested loops.
+        """
         total = 0
         for item in self.items.values():
-            for i in range(item.quantity):
-                total += item.book.price
+            total += item.book.price * item.quantity
         return total
 
     def get_total_items(self):
@@ -84,17 +97,28 @@ class User:
         self.cache = {}
     
     def add_order(self, order):
+        """
+        Add order to user's history.
+        Optimized: Removed unnecessary sorting on every add.
+        Orders can be sorted when needed (in get_order_history if required).
+        """
         self.orders.append(order)
-        self.orders.sort(key=lambda x: x.order_date)
-    
+
     def get_order_history(self):
-        return [order for order in self.orders]
+        """
+        Get user's order history.
+        Returns orders sorted by date (newest first).
+        Sorting done here on-demand instead of on every add.
+        """
+        return sorted(self.orders, key=lambda x: x.order_date, reverse=True)
 
 
 class Order:
-    """Order management class"""
+    """
+    Order management class
+    Optimized: datetime import moved to module level
+    """
     def __init__(self, order_id, user_email, items, shipping_info, payment_info, total_amount):
-        import datetime
         self.order_id = order_id
         self.user_email = user_email
         self.items = items.copy()  # Copy of cart items
@@ -117,13 +141,16 @@ class Order:
 
 
 class PaymentGateway:
-    """Mock payment gateway for processing payments"""
-    
+    """
+    Mock payment gateway for processing payments
+    Optimized: Module imports moved to top level
+    """
+
     @staticmethod
     def process_payment(payment_info):
         """Mock payment processing - returns success/failure with mock logic"""
         card_number = payment_info.get('card_number', '')
-        
+
         # Mock logic: cards ending in '1111' fail, others succeed
         if card_number.endswith('1111'):
             return {
@@ -131,13 +158,9 @@ class PaymentGateway:
                 'message': 'Payment failed: Invalid card number',
                 'transaction_id': None
             }
-        
-        import random
-        import time
-        import datetime
-        
+
         time.sleep(0.1)
-        
+
         transaction_id = f"TXN{random.randint(100000, 999999)}"
         
         if payment_info.get('payment_method') == 'paypal':

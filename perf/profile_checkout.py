@@ -23,32 +23,45 @@ def _ensure_models_then_app():
         return _import_by_filename("app", "app.py")
 
 def run():
+    """
+    Profile checkout process with correct endpoints.
+    Fixed: Updated endpoints to match current app routes.
+    """
     app_mod = _ensure_models_then_app()
     app = getattr(app_mod, "app")
     app.config.update(TESTING=True, SECRET_KEY="ci")
     client = app.test_client()
-    client.post("/add_to_cart", data={"book_id": 1, "quantity": 3})
-    client.post("/apply_discount", data={"code": "SAVE10"})
+
+    # Add item to cart using correct endpoint
+    client.post("/add-to-cart", data={"title": "1984", "quantity": 3})
+
     pr = cProfile.Profile()
     pr.enable()
+
+    # Profile the checkout process
     client.post(
-        "/checkout",
+        "/process-checkout",  # Correct endpoint
         data={
-            "name": "CI",
-            "address": "123 Test",
+            "name": "CI User",
+            "address": "123 Test St",
+            "city": "TestCity",
+            "zip_code": "12345",
             "email": "ci@example.com",
-            "payment_method": "card",
+            "payment_method": "credit_card",
             "card_number": "4242424242424242",
-            "expiry": "12/30",
+            "expiry_date": "12/30",
             "cvv": "123",
+            "discount_code": "SAVE10",
         },
     )
+
     pr.disable()
     s = io.StringIO()
     pstats.Stats(pr, stream=s).sort_stats("cumulative").print_stats(30)
     os.makedirs("perf_artifacts", exist_ok=True)
     with open("perf_artifacts/checkout_profile.txt", "w") as f:
         f.write(s.getvalue())
+    print("[profile_checkout] Profile saved to perf_artifacts/checkout_profile.txt")
 
 if __name__ == "__main__":
     try:
